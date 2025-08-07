@@ -1,68 +1,26 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
-
 import { Button } from "@/components/ui/button"
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
 import { Badge } from "@/components/ui/badge"
-
 import { Input } from "@/components/ui/input"
-
 import { Textarea } from "@/components/ui/textarea"
-
 import { Label } from "@/components/ui/label"
-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-import {
-    ArrowLeft,
-    Plus,
-    Upload,
-    X,
-    Save,
-    Eye,
-    Trash2,
-    Package,
-    Star,
-    Loader2,
-    ImageIcon,
-    Tag,
-    DollarSign,
-    FileText,
-    Palette,
-    Ruler,
-    CheckCircle,
-    AlertCircle,
-    Sparkles,
-    EyeOff,
-    TrendingUp,
-    ShoppingCart,
-    Cloud,
-    RefreshCw,
-    Settings,
-    AlertTriangle,
-    Menu,
-} from "lucide-react"
-
+import { ArrowLeft, Plus, Upload, X, Save, Eye, Trash2, Package, Star, Loader2, ImageIcon, Tag, DollarSign, FileText, Palette, Ruler, CheckCircle, AlertCircle, Sparkles, EyeOff, TrendingUp, ShoppingCart, Cloud, RefreshCw, Settings, AlertTriangle, Menu } from 'lucide-react'
 import Link from "next/link"
-
 import { createProduct, getProducts, deleteProduct, updateProduct } from "@/lib/firestore-api"
-
 import { uploadImages, validateImages, checkCloudinaryStatus } from "@/lib/upload-helpers"
 
 // Tipos para TypeScript
-
 interface ValidationResult {
     valid: boolean
     validFiles: File[]
     errors: string[]
     invalidCount: number
 }
-
 interface UploadResult {
     success: boolean
     uploaded: number
@@ -70,13 +28,11 @@ interface UploadResult {
     images: Array<{ url: string; publicId: string }>
     errors: string[]
 }
-
 interface CloudinaryStatusResult {
     success: boolean
     message: string
     error?: string
 }
-
 interface ProductFormData {
     name: string
     description: string
@@ -104,8 +60,11 @@ export default function PanelPage() {
     const [cloudinaryError, setCloudinaryError] = useState<string>("")
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
-    // 🎯 CATEGORÍAS CON TALLES INTELIGENTES
+    // Nuevo estado para la edición de imágenes de un producto existente
+    const [editingProduct, setEditingProduct] = useState<any | null>(null)
+    const [editProductImages, setEditProductImages] = useState<string[]>([])
 
+    // 🎯 CATEGORÍAS CON TALLES INTELIGENTES
     const categoriesData = {
         Joyas: {
             subcategories: ["Anillos", "Pulseras", "Dijes", "Cadenas", "Aros", "Alianzas"],
@@ -153,9 +112,7 @@ export default function PanelPage() {
             icon: "🧑‍🍳",
         },
     }
-
     // 🎯 ESTADO DEL FORMULARIO
-
     const [formData, setFormData] = useState<ProductFormData>({
         name: "",
         description: "",
@@ -170,25 +127,19 @@ export default function PanelPage() {
         stockCount: 1,
         features: [],
     })
-
     const [newSize, setNewSize] = useState("")
     const [newFeature, setNewFeature] = useState("")
     const [stockInput, setStockInput] = useState("1")
-
     // 🔥 VERIFICAR CONEXIÓN A CLOUDINARY AL CARGAR
-
     useEffect(() => {
         checkCloudinaryConnection()
     }, [])
-
     const checkCloudinaryConnection = async () => {
         try {
             setCloudinaryStatus("checking")
             setCloudinaryError("")
             console.log("🔧 Verificando conexión con Cloudinary...")
-
             const result = (await checkCloudinaryStatus()) as CloudinaryStatusResult
-
             if (result.success) {
                 setCloudinaryStatus("connected")
                 console.log("✅ Cloudinary conectado correctamente")
@@ -207,32 +158,24 @@ export default function PanelPage() {
             showMessage("error", `No se pudo conectar a Cloudinary: ${errorMsg}`)
         }
     }
-
     // 🔥 MOSTRAR MENSAJE
-
     const showMessage = (type: "success" | "error", text: string) => {
         setMessage({ type, text })
         setTimeout(() => setMessage(null), 8000)
     }
-
     // 🔥 OBTENER TALLES SUGERIDOS PARA LA CATEGORÍA
-
     const getSuggestedSizes = (category: string): string[] => {
         const categoryData = categoriesData[category as keyof typeof categoriesData]
         return categoryData?.suggestedSizes || []
     }
-
     // 🔥 GENERAR DESCRIPCIÓN CON IA LOCAL INTELIGENTE
-
     const generateDescription = async () => {
         if (!formData.name.trim()) {
             showMessage("error", "Ingresa el nombre del producto primero")
             return
         }
-
         try {
             setGeneratingDescription(true)
-
             const response = await fetch("/api/generate-description", {
                 method: "POST",
                 headers: {
@@ -244,18 +187,14 @@ export default function PanelPage() {
                     subcategory: formData.subcategory,
                 }),
             })
-
             const data = await response.json()
-
             if (!response.ok) {
                 throw new Error(data.error || "Error al generar descripción")
             }
-
             setFormData((prev) => ({
                 ...prev,
                 description: data.description,
             }))
-
             showMessage("success", "¡Descripción generada con IA!")
         } catch (error: any) {
             console.error("Error generating description:", error)
@@ -264,9 +203,7 @@ export default function PanelPage() {
             setGeneratingDescription(false)
         }
     }
-
     // 🔥 MANEJAR CAMBIO DE CATEGORÍA
-
     const handleCategoryChange = (category: string) => {
         setFormData((prev) => ({
             ...prev,
@@ -276,9 +213,7 @@ export default function PanelPage() {
         }))
         setNewSize("")
     }
-
     // 🔥 MANEJAR CAMBIO DE STOCK
-
     const handleStockChange = (value: string) => {
         setStockInput(value)
         const numValue = Number.parseInt(value) || 0
@@ -287,15 +222,12 @@ export default function PanelPage() {
             stockCount: Math.max(0, numValue),
         }))
     }
-
     // 🔥 CARGAR PRODUCTOS AL CAMBIAR TAB
-
     useEffect(() => {
         if (activeTab === "manage") {
             fetchProducts()
         }
     }, [activeTab])
-
     const fetchProducts = async () => {
         try {
             setLoadingProducts(true)
@@ -308,37 +240,26 @@ export default function PanelPage() {
             setLoadingProducts(false)
         }
     }
-
     // 🔥 MANEJAR SUBIDA DE IMÁGENES - CLOUDINARY MEJORADO CON TIPOS
-
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || [])
         if (files.length === 0) return
-
         console.log("📸 Archivos seleccionados:", files.length)
-
         // Verificar conexión a Cloudinary primero
-
         if (cloudinaryStatus !== "connected") {
             showMessage("error", "Error de conexión a Cloudinary. Haz clic en 'Reconectar' para intentar de nuevo.")
             return
         }
-
         // Validar archivos
-
         const validation = validateImages(files) as ValidationResult
         console.log("📋 Resultado de validación:", validation)
-
         // ✅ LÓGICA MEJORADA: Permitir archivos válidos aunque haya algunos inválidos
-
         if (!validation.valid) {
             console.error("❌ No hay archivos válidos:", validation.errors)
             showMessage("error", `No hay archivos válidos para subir: ${validation.errors.join(", ")}`)
             return
         }
-
         // Mostrar advertencia si hay archivos inválidos, pero continuar con los válidos
-
         if (validation.invalidCount > 0) {
             console.warn(`⚠️ ${validation.invalidCount} archivo(s) inválido(s) serán ignorados`)
             showMessage(
@@ -346,41 +267,31 @@ export default function PanelPage() {
                 `${validation.invalidCount} archivo(s) inválido(s) ignorados. Subiendo ${validation.validFiles.length} archivo(s) válido(s).`,
             )
         }
-
         try {
             setUploadingImages(true)
             console.log("🔄 Iniciando subida de imágenes válidas a Cloudinary...")
-
             const result = (await uploadImages(validation.validFiles)) as UploadResult
             console.log("📊 Resultado de subida:", result)
-
             if (result.success && result.images && result.images.length > 0) {
                 const newImageUrls = result.images.map((img) => img.url)
-
                 setFormData((prev) => ({
                     ...prev,
                     images: [...prev.images, ...validation.validFiles.slice(0, result.uploaded)],
                     imageUrls: [...prev.imageUrls, ...newImageUrls],
                 }))
-
                 let successMessage = `${result.uploaded} imagen(es) subida(s) correctamente a Cloudinary`
-
                 if (validation.invalidCount > 0) {
                     successMessage += ` (${validation.invalidCount} archivo(s) inválido(s) ignorados)`
                 }
-
                 showMessage("success", successMessage)
             } else {
                 throw new Error(result.errors?.[0] || "No se pudieron subir las imágenes")
             }
-
             if (result.failed > 0 && result.errors && result.errors.length > 0) {
                 console.warn("⚠️ Errores en subida:", result.errors)
                 showMessage("error", `${result.failed} imagen(es) fallaron: ${result.errors.join(", ")}`)
             }
-
             // Limpiar el input
-
             e.target.value = ""
         } catch (error: any) {
             console.error("❌ Error uploading images:", error)
@@ -389,9 +300,7 @@ export default function PanelPage() {
             setUploadingImages(false)
         }
     }
-
     // 🔥 AGREGAR TALLE
-
     const addSize = () => {
         if (newSize.trim() && !formData.sizes.includes(newSize.trim())) {
             setFormData((prev) => ({
@@ -401,9 +310,7 @@ export default function PanelPage() {
             setNewSize("")
         }
     }
-
     // 🔥 AGREGAR TALLE SUGERIDO
-
     const addSuggestedSize = (size: string) => {
         if (!formData.sizes.includes(size)) {
             setFormData((prev) => ({
@@ -412,18 +319,14 @@ export default function PanelPage() {
             }))
         }
     }
-
     // 🔥 REMOVER TALLE
-
     const removeSize = (sizeToRemove: string) => {
         setFormData((prev) => ({
             ...prev,
             sizes: prev.sizes.filter((size) => size !== sizeToRemove),
         }))
     }
-
     // 🔥 AGREGAR CARACTERÍSTICA
-
     const addFeature = () => {
         if (newFeature.trim() && !formData.features.includes(newFeature.trim())) {
             setFormData((prev) => ({
@@ -433,18 +336,14 @@ export default function PanelPage() {
             setNewFeature("")
         }
     }
-
     // 🔥 REMOVER CARACTERÍSTICA
-
     const removeFeature = (featureToRemove: string) => {
         setFormData((prev) => ({
             ...prev,
             features: prev.features.filter((feature) => feature !== featureToRemove),
         }))
     }
-
     // 🔥 REMOVER IMAGEN
-
     const removeImage = (indexToRemove: number) => {
         setFormData((prev) => ({
             ...prev,
@@ -452,9 +351,7 @@ export default function PanelPage() {
             imageUrls: prev.imageUrls.filter((_, index) => index !== indexToRemove),
         }))
     }
-
     // 🔥 LIMPIAR FORMULARIO
-
     const clearForm = () => {
         setFormData({
             name: "",
@@ -474,42 +371,32 @@ export default function PanelPage() {
         setNewFeature("")
         setStockInput("1")
     }
-
     // 🔥 CREAR PRODUCTO
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-
         // Validaciones
-
         if (!formData.name.trim()) {
             showMessage("error", "El nombre del producto es obligatorio")
             return
         }
-
         if (!formData.category) {
             showMessage("error", "La categoría es obligatoria")
             return
         }
-
         if (!formData.subcategory) {
             showMessage("error", "La subcategoría es obligatoria")
             return
         }
-
         if (formData.price <= 0) {
             showMessage("error", "El precio debe ser mayor a 0")
             return
         }
-
         if (formData.imageUrls.length === 0) {
             showMessage("error", "Por favor sube al menos una imagen")
             return
         }
-
         try {
             setLoading(true)
-
             const productData = {
                 name: formData.name.trim(),
                 description: formData.description.trim(),
@@ -525,11 +412,9 @@ export default function PanelPage() {
                 whatsappMessage: `Hola! Me interesa el producto: ${formData.name}. ¿Podrías darme más información?`,
                 features: formData.features,
             }
-
             await createProduct(productData)
             showMessage("success", "¡Producto creado exitosamente!")
             clearForm()
-
             if (activeTab === "manage") {
                 fetchProducts()
             }
@@ -540,12 +425,9 @@ export default function PanelPage() {
             setLoading(false)
         }
     }
-
     // 🔥 ELIMINAR PRODUCTO
-
     const handleDeleteProduct = async (productId: string, productName: string) => {
         if (!confirm(`¿Estás segura de que quieres eliminar "${productName}"?`)) return
-
         try {
             await deleteProduct(productId)
             showMessage("success", "Producto eliminado correctamente")
@@ -555,9 +437,7 @@ export default function PanelPage() {
             showMessage("error", "Error al eliminar el producto")
         }
     }
-
     // 🔥 TOGGLE STOCK
-
     const handleToggleStock = async (product: any) => {
         try {
             await updateProduct(product.id, { inStock: !product.inStock })
@@ -569,12 +449,98 @@ export default function PanelPage() {
         }
     }
 
-    // Estadísticas
+    // 🔥 INICIAR EDICIÓN DE IMÁGENES
+    const startEditingImages = (product: any) => {
+        setEditingProduct(product)
+        setEditProductImages(product.images || []) // Initialize with existing images
+    }
 
+    // 🔥 MANEJAR SUBIDA DE IMÁGENES PARA EDICIÓN
+    const handleEditImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || [])
+        if (files.length === 0 || !editingProduct) return
+
+        if (cloudinaryStatus !== "connected") {
+            showMessage("error", "Error de conexión a Cloudinary. Haz clic en 'Reconectar' para intentar de nuevo.")
+            return
+        }
+
+        const validation = validateImages(files) as ValidationResult
+        if (!validation.valid) {
+            showMessage("error", `No hay archivos válidos para subir: ${validation.errors.join(", ")}`)
+            return
+        }
+
+        if (validation.invalidCount > 0) {
+            showMessage(
+                "error",
+                `${validation.invalidCount} archivo(s) inválido(s) ignorados. Subiendo ${validation.validFiles.length} archivo(s) válido(s).`,
+            )
+        }
+
+        try {
+            setUploadingImages(true)
+            const result = (await uploadImages(validation.validFiles)) as UploadResult
+
+            if (result.success && result.images && result.images.length > 0) {
+                const newImageUrls = result.images.map((img) => img.url)
+                setEditProductImages((prev) => [...prev, ...newImageUrls])
+                showMessage("success", `${result.uploaded} imagen(es) subida(s) correctamente a Cloudinary`)
+            } else {
+                throw new Error(result.errors?.[0] || "No se pudieron subir las imágenes")
+            }
+            if (result.failed > 0 && result.errors && result.errors.length > 0) {
+                showMessage("error", `${result.failed} imagen(es) fallaron: ${result.errors.join(", ")}`)
+            }
+            e.target.value = "" // Clear the input
+        } catch (error: any) {
+            console.error("❌ Error uploading images for edit:", error)
+            showMessage("error", `Error al subir las imágenes: ${error.message}`)
+        } finally {
+            setUploadingImages(false)
+        }
+    }
+
+    // 🔥 REMOVER IMAGEN PARA EDICIÓN
+    const removeEditImage = (indexToRemove: number) => {
+        setEditProductImages((prev) => prev.filter((_, index) => index !== indexToRemove))
+    }
+
+    // 🔥 GUARDAR CAMBIOS DE IMÁGENES
+    const handleSaveEditedImages = async () => {
+        if (!editingProduct) return
+
+        try {
+            setLoading(true)
+            const updatedImages = editProductImages.filter(url => url.trim() !== ""); // Ensure no empty strings
+            const mainImage = updatedImages.length > 0 ? updatedImages[0] : "/placeholder.svg?height=200&width=300"; // Set a default if no images
+
+            await updateProduct(editingProduct.id, {
+                images: updatedImages,
+                mainImage: mainImage,
+            })
+            showMessage("success", "Imágenes del producto actualizadas exitosamente!")
+            setEditingProduct(null) // Close the editing interface
+            setEditProductImages([]) // Clear temporary images
+            fetchProducts() // Refresh the product list
+        } catch (error) {
+            console.error("Error saving edited images:", error)
+            showMessage("error", "Error al guardar las imágenes. Intenta nuevamente.")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // 🔥 CANCELAR EDICIÓN DE IMÁGENES
+    const handleCancelEditImages = () => {
+        setEditingProduct(null)
+        setEditProductImages([])
+    }
+
+    // Estadísticas
     const totalProducts = products.length
     const activeProducts = products.filter((p: any) => p.inStock).length
     const totalValue = products.reduce((sum: number, p: any) => sum + p.price * (p.stockCount || 1), 0)
-
     return (
         <div className="min-h-screen bg-gradient-to-br from-[#f5f0ed] to-[#ebcfc4]">
             {/* 📱 HEADER RESPONSIVE */}
@@ -587,7 +553,6 @@ export default function PanelPage() {
                                 <ArrowLeft className="w-4 h-4" />
                             </Button>
                         </Link>
-
                         <div className="text-center">
                             <h1 className="text-lg font-bold text-[#9d6a4e]">Panel Admin</h1>
                             <div className="flex items-center justify-center space-x-1">
@@ -601,7 +566,6 @@ export default function PanelPage() {
                                 </span>
                             </div>
                         </div>
-
                         <Button
                             variant="ghost"
                             size="sm"
@@ -611,7 +575,6 @@ export default function PanelPage() {
                             <Menu className="w-4 h-4" />
                         </Button>
                     </div>
-
                     {/* 🖥️ DESKTOP HEADER */}
                     <div className="hidden lg:flex items-center justify-between">
                         <div className="flex items-center space-x-4">
@@ -650,7 +613,6 @@ export default function PanelPage() {
                                 </div>
                             </div>
                         </div>
-
                         <div className="flex items-center space-x-2">
                             <Button
                                 onClick={() => setActiveTab("create")}
@@ -680,7 +642,6 @@ export default function PanelPage() {
                             </Button>
                         </div>
                     </div>
-
                     {/* 📱 MOBILE MENU */}
                     {isMobileMenuOpen && (
                         <div className="lg:hidden mt-4 pt-4 border-t border-[#ebcfc4] space-y-3">
@@ -693,8 +654,8 @@ export default function PanelPage() {
                                     variant={activeTab === "create" ? "default" : "outline"}
                                     size="sm"
                                     className={`w-full justify-start ${activeTab === "create"
-                                            ? "bg-[#9d6a4e] hover:bg-[#b38872] text-white"
-                                            : "border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed]"
+                                        ? "bg-[#9d6a4e] hover:bg-[#b38872] text-white"
+                                        : "border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed]"
                                         }`}
                                 >
                                     <Plus className="w-4 h-4 mr-2" />
@@ -708,15 +669,14 @@ export default function PanelPage() {
                                     variant={activeTab === "manage" ? "default" : "outline"}
                                     size="sm"
                                     className={`w-full justify-start ${activeTab === "manage"
-                                            ? "bg-[#9d6a4e] hover:bg-[#b38872] text-white"
-                                            : "border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed]"
+                                        ? "bg-[#9d6a4e] hover:bg-[#b38872] text-white"
+                                        : "border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed]"
                                         }`}
                                 >
                                     <Package className="w-4 h-4 mr-2" />
                                     Gestionar ({products.length})
                                 </Button>
                             </div>
-
                             {cloudinaryStatus === "error" && (
                                 <Button
                                     onClick={checkCloudinaryConnection}
@@ -732,14 +692,13 @@ export default function PanelPage() {
                     )}
                 </div>
             </header>
-
             {/* 📱 MESSAGE ALERT RESPONSIVE */}
             {message && (
                 <div className="container mx-auto px-4 pt-4">
                     <div
                         className={`flex items-start p-3 lg:p-4 rounded-lg shadow-sm ${message.type === "success"
-                                ? "bg-green-50 border border-green-200 text-green-800"
-                                : "bg-red-50 border border-red-200 text-red-800"
+                            ? "bg-green-50 border border-green-200 text-green-800"
+                            : "bg-red-50 border border-red-200 text-red-800"
                             }`}
                     >
                         {message.type === "success" ? (
@@ -754,7 +713,6 @@ export default function PanelPage() {
                     </div>
                 </div>
             )}
-
             {/* 🔥 ALERTA DE CONFIGURACIÓN DE CLOUDINARY RESPONSIVE */}
             {cloudinaryStatus === "error" && (
                 <div className="container mx-auto px-4 pt-4">
@@ -769,7 +727,6 @@ export default function PanelPage() {
                                     <p className="text-red-700 text-sm lg:text-base">
                                         Para subir imágenes necesitas configurar Cloudinary (no Firebase). Error: {cloudinaryError}
                                     </p>
-
                                     <div className="bg-red-100 p-3 lg:p-4 rounded-lg space-y-3">
                                         <p className="text-sm lg:text-base text-red-800 font-medium">
                                             🔧 Pasos para configurar Cloudinary:
@@ -802,7 +759,6 @@ export default function PanelPage() {
                                             </li>
                                         </ol>
                                     </div>
-
                                     <div className="bg-blue-100 p-3 lg:p-4 rounded-lg">
                                         <p className="text-sm lg:text-base text-blue-800 font-medium mb-2">
                                             ☁️ ¿Por qué Cloudinary y no Firebase?
@@ -821,7 +777,6 @@ export default function PanelPage() {
                     </Card>
                 </div>
             )}
-
             <div className="container mx-auto px-4 py-4 lg:py-8">
                 {/* 📊 STATS CARDS RESPONSIVE - Solo en gestión */}
                 {activeTab === "manage" && (
@@ -837,7 +792,6 @@ export default function PanelPage() {
                                 </div>
                             </CardContent>
                         </Card>
-
                         <Card>
                             <CardContent className="p-4 lg:p-6">
                                 <div className="flex items-center justify-between">
@@ -849,7 +803,6 @@ export default function PanelPage() {
                                 </div>
                             </CardContent>
                         </Card>
-
                         <Card className="sm:col-span-2 lg:col-span-1">
                             <CardContent className="p-4 lg:p-6">
                                 <div className="flex items-center justify-between">
@@ -863,7 +816,6 @@ export default function PanelPage() {
                         </Card>
                     </div>
                 )}
-
                 {/* 📝 CREAR PRODUCTO RESPONSIVE */}
                 {activeTab === "create" && (
                     <div className="max-w-4xl mx-auto">
@@ -896,7 +848,6 @@ export default function PanelPage() {
                                                     required
                                                 />
                                             </div>
-
                                             <div>
                                                 <Label
                                                     htmlFor="price"
@@ -919,7 +870,6 @@ export default function PanelPage() {
                                                     required
                                                 />
                                             </div>
-
                                             <div>
                                                 <Label
                                                     htmlFor="badge"
@@ -936,7 +886,6 @@ export default function PanelPage() {
                                                     className="mt-1"
                                                 />
                                             </div>
-
                                             <div>
                                                 <Label
                                                     htmlFor="stockCount"
@@ -955,7 +904,6 @@ export default function PanelPage() {
                                                 />
                                             </div>
                                         </div>
-
                                         <div className="space-y-4">
                                             <div>
                                                 <Label htmlFor="category" className="text-[#9d6a4e] font-medium text-sm lg:text-base">
@@ -977,7 +925,6 @@ export default function PanelPage() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-
                                             <div>
                                                 <Label htmlFor="subcategory" className="text-[#9d6a4e] font-medium text-sm lg:text-base">
                                                     Subcategoría *
@@ -1002,7 +949,6 @@ export default function PanelPage() {
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-
                                             <div className="flex items-center space-x-2">
                                                 <input
                                                     type="checkbox"
@@ -1017,7 +963,6 @@ export default function PanelPage() {
                                             </div>
                                         </div>
                                     </div>
-
                                     {/* 📝 DESCRIPCIÓN CON IA RESPONSIVE */}
                                     <div>
                                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
@@ -1057,7 +1002,6 @@ export default function PanelPage() {
                                             rows={4}
                                         />
                                     </div>
-
                                     {/* 📏 TALLES RESPONSIVE */}
                                     <div>
                                         <Label className="text-[#9d6a4e] font-medium flex items-center text-sm lg:text-base">
@@ -1069,7 +1013,6 @@ export default function PanelPage() {
                                                 </span>
                                             )}
                                         </Label>
-
                                         {formData.category && getSuggestedSizes(formData.category).length > 0 && (
                                             <div className="mt-2 mb-3">
                                                 <p className="text-xs lg:text-sm text-gray-600 mb-2">
@@ -1084,8 +1027,8 @@ export default function PanelPage() {
                                                             size="sm"
                                                             variant="outline"
                                                             className={`text-xs ${formData.sizes.includes(size)
-                                                                    ? "bg-[#ebcfc4] text-[#9d6a4e] border-[#ebcfc4]"
-                                                                    : "border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed]"
+                                                                ? "bg-[#ebcfc4] text-[#9d6a4e] border-[#ebcfc4]"
+                                                                : "border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed]"
                                                                 }`}
                                                             disabled={formData.sizes.includes(size)}
                                                         >
@@ -1096,7 +1039,6 @@ export default function PanelPage() {
                                                 </div>
                                             </div>
                                         )}
-
                                         <div className="space-y-2">
                                             <div className="flex gap-2">
                                                 <Input
@@ -1140,7 +1082,6 @@ export default function PanelPage() {
                                             )}
                                         </div>
                                     </div>
-
                                     {/* 🎨 CARACTERÍSTICAS RESPONSIVE */}
                                     <div>
                                         <Label className="text-[#9d6a4e] font-medium flex items-center text-sm lg:text-base">
@@ -1184,14 +1125,12 @@ export default function PanelPage() {
                                             )}
                                         </div>
                                     </div>
-
                                     {/* 🖼️ IMÁGENES RESPONSIVE */}
                                     <div>
                                         <Label className="text-[#9d6a4e] font-medium flex items-center text-sm lg:text-base">
                                             <ImageIcon className="w-4 h-4 mr-2" />
                                             Imágenes del Producto *
                                         </Label>
-
                                         <div className="mt-2 mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                                             <div className="flex items-start space-x-2">
                                                 <Cloud className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -1201,12 +1140,11 @@ export default function PanelPage() {
                                                 </p>
                                             </div>
                                         </div>
-
                                         <div className="mt-2">
                                             <div
                                                 className={`border-2 border-dashed rounded-lg p-4 lg:p-6 text-center transition-colors ${cloudinaryStatus === "connected"
-                                                        ? "border-[#ebcfc4] hover:border-[#d4b5a8] bg-white"
-                                                        : "border-red-300 bg-red-50"
+                                                    ? "border-[#ebcfc4] hover:border-[#d4b5a8] bg-white"
+                                                    : "border-red-300 bg-red-50"
                                                     }`}
                                             >
                                                 <input
@@ -1247,7 +1185,6 @@ export default function PanelPage() {
                                                     </p>
                                                 </label>
                                             </div>
-
                                             {/* 🖼️ PREVIEW DE IMÁGENES RESPONSIVE */}
                                             {formData.imageUrls.length > 0 && (
                                                 <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 lg:gap-4">
@@ -1274,7 +1211,6 @@ export default function PanelPage() {
                                             )}
                                         </div>
                                     </div>
-
                                     {/* 🔘 BOTONES RESPONSIVE */}
                                     <div className="flex flex-col sm:flex-row sm:justify-between gap-3 pt-4 lg:pt-6">
                                         <Button
@@ -1308,7 +1244,6 @@ export default function PanelPage() {
                         </Card>
                     </div>
                 )}
-
                 {/* 📦 GESTIONAR PRODUCTOS RESPONSIVE */}
                 {activeTab === "manage" && (
                     <div>
@@ -1339,73 +1274,210 @@ export default function PanelPage() {
                                         </Button>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
-                                        {products.map((product: any) => (
-                                            <Card key={product.id} className="border border-[#ebcfc4] hover:shadow-lg transition-shadow">
-                                                <div className="relative">
-                                                    <img
-                                                        src={product.mainImage || product.images?.[0] || "/placeholder.svg?height=200&width=300"}
-                                                        alt={product.name}
-                                                        className="w-full h-40 lg:h-48 object-cover rounded-t-lg"
-                                                        onError={(e) => {
-                                                            const target = e.target as HTMLImageElement
-                                                            target.src = "/placeholder.svg?height=200&width=300"
-                                                        }}
-                                                    />
-                                                    <div className="absolute top-2 right-2 flex flex-col gap-1">
-                                                        <Badge
-                                                            variant={product.inStock ? "default" : "secondary"}
-                                                            className={`${product.inStock ? "bg-green-500" : "bg-gray-500"} text-xs`}
-                                                        >
-                                                            {product.inStock ? "En Stock" : "Sin Stock"}
-                                                        </Badge>
-                                                        {product.badge && <Badge className="bg-[#9d6a4e] text-xs">{product.badge}</Badge>}
+                                    <>
+                                        {/* Image Editing Section/Modal */}
+                                        {editingProduct && (
+                                            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                                                <Card className="w-full max-w-2xl border-0 shadow-xl">
+                                                    <CardHeader className="bg-gradient-to-r from-[#ebcfc4] to-[#d4b5a8] text-white p-4">
+                                                        <CardTitle className="flex items-center text-lg">
+                                                            <ImageIcon className="w-4 h-4 mr-2" />
+                                                            Gestionar Imágenes para "{editingProduct.name}"
+                                                        </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent className="p-4 space-y-4">
+                                                        <div>
+                                                            <Label className="text-[#9d6a4e] font-medium flex items-center text-sm lg:text-base">
+                                                                <ImageIcon className="w-4 h-4 mr-2" />
+                                                                Imágenes Actuales
+                                                            </Label>
+                                                            <div className="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-60 overflow-y-auto pr-2">
+                                                                {editProductImages.length > 0 ? (
+                                                                    editProductImages.map((url, index) => (
+                                                                        <div key={index} className="relative group">
+                                                                            <img
+                                                                                src={url || "/placeholder.svg?height=200&width=300"}
+                                                                                alt={`Imagen ${index + 1}`}
+                                                                                className="w-full h-20 object-cover rounded-lg border border-[#ebcfc4]"
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => removeEditImage(index)}
+                                                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                            >
+                                                                                <X className="w-3 h-3" />
+                                                                            </button>
+                                                                            {index === 0 && (
+                                                                                <Badge className="absolute bottom-1 left-1 text-xs bg-[#9d6a4e]">Principal</Badge>
+                                                                            )}
+                                                                        </div>
+                                                                    ))
+                                                                ) : (
+                                                                    <p className="text-sm text-gray-500 col-span-full">No hay imágenes para este producto.</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-[#9d6a4e] font-medium flex items-center text-sm lg:text-base">
+                                                                <Upload className="w-4 h-4 mr-2" />
+                                                                Añadir Nuevas Imágenes
+                                                            </Label>
+                                                            <div
+                                                                className={`mt-2 border-2 border-dashed rounded-lg p-4 text-center transition-colors ${cloudinaryStatus === "connected"
+                                                                    ? "border-[#ebcfc4] hover:border-[#d4b5a8] bg-white"
+                                                                    : "border-red-300 bg-red-50"
+                                                                    }`}
+                                                            >
+                                                                <input
+                                                                    type="file"
+                                                                    multiple
+                                                                    accept="image/*"
+                                                                    onChange={handleEditImageUpload}
+                                                                    className="hidden"
+                                                                    id="edit-image-upload"
+                                                                    disabled={uploadingImages || cloudinaryStatus !== "connected"}
+                                                                />
+                                                                <label
+                                                                    htmlFor="edit-image-upload"
+                                                                    className={`cursor-pointer block ${cloudinaryStatus !== "connected" ? "cursor-not-allowed" : ""
+                                                                        }`}
+                                                                >
+                                                                    {uploadingImages ? (
+                                                                        <Loader2 className="w-8 h-8 mx-auto mb-3 text-[#9d6a4e] animate-spin" />
+                                                                    ) : cloudinaryStatus === "error" ? (
+                                                                        <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-red-500" />
+                                                                    ) : (
+                                                                        <Upload className="w-8 h-8 mx-auto mb-3 text-[#9d6a4e]" />
+                                                                    )}
+                                                                    <p
+                                                                        className={`text-base font-medium mb-2 ${cloudinaryStatus === "connected" ? "text-[#9d6a4e]" : "text-red-600"
+                                                                            }`}
+                                                                    >
+                                                                        {uploadingImages
+                                                                            ? "Subiendo a Cloudinary..."
+                                                                            : cloudinaryStatus === "error"
+                                                                                ? "Configuración de Cloudinary requerida"
+                                                                                : "Haz clic para añadir imágenes"}
+                                                                    </p>
+                                                                    <p className="text-xs text-gray-500">
+                                                                        {cloudinaryStatus === "error"
+                                                                            ? "Configura Cloudinary para subir imágenes"
+                                                                            : "JPG, PNG, WebP, GIF - Máximo 10MB por imagen"}
+                                                                    </p>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex justify-end gap-2 pt-4">
+                                                            <Button
+                                                                type="button"
+                                                                onClick={handleCancelEditImages}
+                                                                variant="outline"
+                                                                className="border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed] bg-transparent"
+                                                            >
+                                                                Cancelar
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                onClick={handleSaveEditedImages}
+                                                                disabled={loading || uploadingImages || cloudinaryStatus !== "connected"}
+                                                                className="bg-[#9d6a4e] hover:bg-[#b38872] text-white"
+                                                            >
+                                                                {loading ? (
+                                                                    <>
+                                                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                                        Guardando...
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <Save className="w-4 h-4 mr-2" />
+                                                                        Guardar Cambios
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            </div>
+                                        )}
+
+                                        {/* Existing Product Grid */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                                            {products.map((product: any) => (
+                                                <Card key={product.id} className="border border-[#ebcfc4] hover:shadow-lg transition-shadow">
+                                                    <div className="relative">
+                                                        <img
+                                                            src={product.mainImage || product.images?.[0] || "/placeholder.svg?height=200&width=300"}
+                                                            alt={product.name}
+                                                            className="w-full h-40 lg:h-48 object-cover rounded-t-lg"
+                                                            onError={(e) => {
+                                                                const target = e.target as HTMLImageElement
+                                                                target.src = "/placeholder.svg?height=200&width=300"
+                                                            }}
+                                                        />
+                                                        <div className="absolute top-2 right-2 flex flex-col gap-1">
+                                                            <Badge
+                                                                variant={product.inStock ? "default" : "secondary"}
+                                                                className={`${product.inStock ? "bg-green-500" : "bg-gray-500"} text-xs`}
+                                                            >
+                                                                {product.inStock ? "En Stock" : "Sin Stock"}
+                                                            </Badge>
+                                                            {product.badge && <Badge className="bg-[#9d6a4e] text-xs">{product.badge}</Badge>}
+                                                        </div>
                                                     </div>
-                                                </div>
-
-                                                <CardContent className="p-3 lg:p-4">
-                                                    <h3 className="font-semibold text-[#9d6a4e] mb-2 line-clamp-2 text-sm lg:text-base">
-                                                        {product.name}
-                                                    </h3>
-                                                    <p className="text-xs lg:text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
-
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <span className="text-base lg:text-lg font-bold text-[#9d6a4e]">
-                                                            ARS ${product.price?.toLocaleString()}
-                                                        </span>
-                                                        <span className="text-xs lg:text-sm text-gray-500">Stock: {product.stockCount || 1}</span>
-                                                    </div>
-
-                                                    <div className="flex gap-2">
-                                                        <Button
-                                                            onClick={() => handleToggleStock(product)}
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className={`flex-1 text-xs lg:text-sm ${product.inStock
+                                                    <CardContent className="p-3 lg:p-4">
+                                                        <h3 className="font-semibold text-[#9d6a4e] mb-2 line-clamp-2 text-sm lg:text-base">
+                                                            {product.name}
+                                                        </h3>
+                                                        <p className="text-xs lg:text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <span className="text-base lg:text-lg font-bold text-[#9d6a4e]">
+                                                                ARS ${product.price?.toLocaleString()}
+                                                            </span>
+                                                            <span className="text-xs lg:text-sm text-gray-500">Stock: {product.stockCount || 1}</span>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <Button
+                                                                onClick={() => handleToggleStock(product)}
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className={`flex-1 text-xs lg:text-sm ${product.inStock
                                                                     ? "border-red-200 text-red-600 hover:bg-red-50"
                                                                     : "border-green-200 text-green-600 hover:bg-green-50"
-                                                                }`}
-                                                        >
-                                                            {product.inStock ? (
-                                                                <EyeOff className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
-                                                            ) : (
-                                                                <Eye className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
-                                                            )}
-                                                            {product.inStock ? "Ocultar" : "Mostrar"}
-                                                        </Button>
-                                                        <Button
-                                                            onClick={() => handleDeleteProduct(product.id, product.name)}
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="border-red-200 text-red-600 hover:bg-red-50 px-2 lg:px-3"
-                                                        >
-                                                            <Trash2 className="w-3 h-3 lg:w-4 lg:h-4" />
-                                                        </Button>
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
+                                                                    }`}
+                                                            >
+                                                                {product.inStock ? (
+                                                                    <EyeOff className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
+                                                                ) : (
+                                                                    <Eye className="w-3 h-3 lg:w-4 lg:h-4 mr-1" />
+                                                                )}
+                                                                {product.inStock ? "Ocultar" : "Mostrar"}
+                                                            </Button>
+                                                            {/* New button to edit images */}
+                                                            <Button
+                                                                onClick={() => startEditingImages(product)}
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed] px-2 lg:px-3"
+                                                            >
+                                                                <ImageIcon className="w-3 h-3 lg:w-4 lg:h-4" />
+                                                                <span className="ml-1 hidden sm:inline">Imágenes</span>
+                                                            </Button>
+                                                            <Button
+                                                                onClick={() => handleDeleteProduct(product.id, product.name)}
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="border-red-200 text-red-600 hover:bg-red-50 px-2 lg:px-3"
+                                                            >
+                                                                <Trash2 className="w-3 h-3 lg:w-4 lg:h-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </>
                                 )}
                             </CardContent>
                         </Card>
