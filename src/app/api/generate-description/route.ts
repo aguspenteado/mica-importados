@@ -191,7 +191,15 @@ function generateProductDescription(name: string, category: string, subcategory:
 
 export async function POST(request: NextRequest) {
     try {
-        const { name, category, subcategory } = await request.json()
+        let body
+        try {
+            body = await request.json()
+        } catch (parseError) {
+            console.error("Error parsing request body:", parseError)
+            return NextResponse.json({ error: "Error al procesar los datos enviados" }, { status: 400 })
+        }
+
+        const { name, category, subcategory } = body
 
         // Validaciones
         if (!name || typeof name !== "string") {
@@ -205,14 +213,19 @@ export async function POST(request: NextRequest) {
         // Generar descripción
         const description = generateProductDescription(name.trim(), category.trim(), subcategory?.trim() || "")
 
+        if (!description || description.trim().length === 0) {
+            return NextResponse.json({ error: "No se pudo generar la descripción" }, { status: 500 })
+        }
+
         return NextResponse.json({
             description,
             detectedBrand: detectBrandAndModel(name)?.brand || null,
             category,
             subcategory,
         })
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error generating description:", error)
-        return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+        const errorMessage = error?.message || "Error interno del servidor"
+        return NextResponse.json({ error: errorMessage }, { status: 500 })
     }
 }

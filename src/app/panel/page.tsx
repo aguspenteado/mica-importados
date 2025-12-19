@@ -308,11 +308,33 @@ export default function PanelPage() {
                     category: formData.category,
                     subcategory: formData.subcategory,
                 }),
+            }).catch((fetchError) => {
+                console.error("Fetch error:", fetchError)
+                throw new Error("No se pudo conectar con el servidor. Asegúrate de que el servidor esté ejecutándose.")
             })
-            const data = await response.json()
-            if (!response.ok) {
-                throw new Error(data.error || "Error al generar descripción")
+
+            if (!response) {
+                throw new Error("No se recibió respuesta del servidor")
             }
+
+            // Verificar si la respuesta es JSON válido
+            let data
+            try {
+                data = await response.json()
+            } catch (jsonError) {
+                const text = await response.text()
+                console.error("Error parsing JSON:", jsonError, "Response text:", text)
+                throw new Error(`Error en la respuesta del servidor: ${response.status} ${response.statusText}`)
+            }
+
+            if (!response.ok) {
+                throw new Error(data.error || `Error al generar descripción: ${response.status} ${response.statusText}`)
+            }
+
+            if (!data.description) {
+                throw new Error("La descripción generada está vacía")
+            }
+
             setFormData((prev) => ({
                 ...prev,
                 description: data.description,
@@ -320,7 +342,8 @@ export default function PanelPage() {
             showMessage("success", "¡Descripción generada con IA!")
         } catch (error: any) {
             console.error("Error generating description:", error)
-            showMessage("error", error.message || "Error al generar la descripción")
+            const errorMessage = error.message || "Error al generar la descripción. Verifica que el servidor esté ejecutándose."
+            showMessage("error", errorMessage)
         } finally {
             setGeneratingDescription(false)
         }

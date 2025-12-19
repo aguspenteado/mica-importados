@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { ShoppingCart, Search, Menu, X, MessageCircle, Plus, Filter, Loader2, MapPin, Tag, FolderPlus, Package, Trash2 } from "lucide-react"
+import { ShoppingCart, Search, Menu, X, MessageCircle, Plus, Filter, Loader2, MapPin, Tag, FolderPlus, Package, Trash2, ChevronLeft, ChevronRight, ZoomIn } from "lucide-react"
 import Link from "next/link"
 import { useCart } from "@/components/ui/cart-provider"
 import { CartDrawer } from "@/components/ui/cart-drawer"
@@ -27,6 +27,8 @@ export default function ProductsPage() {
     const { state, dispatch } = useCart()
     const [selectedProduct, setSelectedProduct] = useState<any>(null)
     const [isProductModalOpen, setIsProductModalOpen] = useState(false)
+    const [currentImageIndex, setCurrentImageIndex] = useState(0)
+    const [isImageViewerOpen, setIsImageViewerOpen] = useState(false)
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
     const [newCategoryName, setNewCategoryName] = useState("")
     const [newCategoryIcon, setNewCategoryIcon] = useState("📦")
@@ -70,6 +72,32 @@ export default function ProductsPage() {
             loadCategories()
         }
     }, [isCategoryModalOpen])
+
+    // Soporte para teclado en el visor de imágenes
+    useEffect(() => {
+        if (!isImageViewerOpen || !selectedProduct) return
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "ArrowLeft") {
+                const images = selectedProduct.images || []
+                if (images.length > 0) {
+                    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
+                }
+            } else if (e.key === "ArrowRight") {
+                const images = selectedProduct.images || []
+                if (images.length > 0) {
+                    setCurrentImageIndex((prev) => (prev + 1) % images.length)
+                }
+            } else if (e.key === "Escape") {
+                setIsImageViewerOpen(false)
+            }
+        }
+
+        window.addEventListener("keydown", handleKeyDown)
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown)
+        }
+    }, [isImageViewerOpen, selectedProduct])
 
     const loadCategories = async () => {
         try {
@@ -158,7 +186,32 @@ export default function ProductsPage() {
 
     const handleViewDetails = (product: any) => {
         setSelectedProduct(product)
+        setCurrentImageIndex(0)
         setIsProductModalOpen(true)
+    }
+
+    const openImageViewer = (product: any, index: number = 0) => {
+        setSelectedProduct(product)
+        setCurrentImageIndex(index)
+        setIsImageViewerOpen(true)
+    }
+
+    const nextImage = () => {
+        if (selectedProduct) {
+            const images = selectedProduct.images || []
+            if (images.length > 0) {
+                setCurrentImageIndex((prev) => (prev + 1) % images.length)
+            }
+        }
+    }
+
+    const prevImage = () => {
+        if (selectedProduct) {
+            const images = selectedProduct.images || []
+            if (images.length > 0) {
+                setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
+            }
+        }
     }
 
     const handleCartCheckout = () => {
@@ -168,6 +221,8 @@ export default function ProductsPage() {
     const closeProductModal = () => {
         setIsProductModalOpen(false)
         setSelectedProduct(null)
+        setIsImageViewerOpen(false)
+        setCurrentImageIndex(0)
     }
 
     const closeCategoryModal = () => {
@@ -684,7 +739,18 @@ export default function ProductsPage() {
                                             src={product.mainImage || product.images?.[0] || "/placeholder.svg"}
                                             alt={product.name}
                                             className="w-full h-64 object-cover group-hover:scale-110 transition-transform duration-300 cursor-pointer"
-                                            onClick={() => handleViewDetails(product)}
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                if (product.images && product.images.length > 0) {
+                                                    openImageViewer(product, 0)
+                                                } else {
+                                                    handleViewDetails(product)
+                                                }
+                                            }}
+                                            onError={(e) => {
+                                                const target = e.target as HTMLImageElement
+                                                target.src = "/placeholder.svg"
+                                            }}
                                         />
                                         <div className="absolute top-4 left-4">
                                             <Badge className="bg-gradient-to-r from-[#ebcfc4] to-[#d4b5a8] text-white border-0 px-3 py-1 text-sm font-semibold">
@@ -797,12 +863,46 @@ export default function ProductsPage() {
 
                             <div className="p-6">
                                 {/* Main Image */}
-                                <div className="mb-6">
-                                    <img
-                                        src={selectedProduct.mainImage || selectedProduct.images?.[0] || "/placeholder.svg"}
-                                        alt={selectedProduct.name}
-                                        className="w-full h-80 object-cover rounded-xl"
-                                    />
+                                <div className="mb-6 relative">
+                                    <div className="relative group">
+                                        <img
+                                            src={selectedProduct.images?.[currentImageIndex] || selectedProduct.mainImage || selectedProduct.images?.[0] || "/placeholder.svg"}
+                                            alt={selectedProduct.name}
+                                            className="w-full h-80 object-cover rounded-xl cursor-pointer"
+                                            onClick={() => openImageViewer(selectedProduct, currentImageIndex)}
+                                            onError={(e) => {
+                                                const target = e.target as HTMLImageElement
+                                                target.src = "/placeholder.svg"
+                                            }}
+                                        />
+                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                            <ZoomIn className="w-12 h-12 text-white drop-shadow-lg" />
+                                        </div>
+                                    </div>
+                                    {/* Navegación de imágenes en la imagen principal */}
+                                    {selectedProduct.images && selectedProduct.images.length > 1 && (
+                                        <>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={prevImage}
+                                                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white border-0 rounded-full w-10 h-10 p-0"
+                                            >
+                                                <ChevronLeft className="w-6 h-6" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={nextImage}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white border-0 rounded-full w-10 h-10 p-0"
+                                            >
+                                                <ChevronRight className="w-6 h-6" />
+                                            </Button>
+                                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
+                                                {currentImageIndex + 1} / {selectedProduct.images.length}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
 
                                 {/* Thumbnail Images */}
@@ -813,7 +913,15 @@ export default function ProductsPage() {
                                                 key={index}
                                                 src={image || "/placeholder.svg"}
                                                 alt={`${selectedProduct.name} ${index + 1}`}
-                                                className="w-full h-20 object-cover rounded-lg border-2 border-gray-200 cursor-pointer hover:border-[#9d6a4e]"
+                                                onClick={() => setCurrentImageIndex(index)}
+                                                onError={(e) => {
+                                                    const target = e.target as HTMLImageElement
+                                                    target.src = "/placeholder.svg"
+                                                }}
+                                                className={`w-full h-20 object-cover rounded-lg border-2 cursor-pointer transition-all ${currentImageIndex === index
+                                                        ? "border-[#9d6a4e] scale-105"
+                                                        : "border-gray-200 hover:border-[#9d6a4e]"
+                                                    }`}
                                             />
                                         ))}
                                     </div>
@@ -1258,6 +1366,84 @@ export default function ProductsPage() {
                         </div>
                     </div>
                 </>
+            )}
+
+            {/* 🖼️ VISOR DE IMÁGENES FULLSCREEN */}
+            {isImageViewerOpen && selectedProduct && (
+                <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsImageViewerOpen(false)}
+                        className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full w-10 h-10 p-0 z-20"
+                    >
+                        <X className="w-6 h-6" />
+                    </Button>
+
+                    {selectedProduct.images && selectedProduct.images.length > 1 && (
+                        <>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={prevImage}
+                                className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white border-0 rounded-full w-12 h-12 p-0 z-20"
+                            >
+                                <ChevronLeft className="w-8 h-8" />
+                            </Button>
+
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={nextImage}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white border-0 rounded-full w-12 h-12 p-0 z-20"
+                            >
+                                <ChevronRight className="w-8 h-8" />
+                            </Button>
+                        </>
+                    )}
+
+                    <div className="max-w-7xl w-full max-h-[90vh] flex flex-col items-center">
+                        <img
+                            src={selectedProduct.images?.[currentImageIndex] || selectedProduct.mainImage || selectedProduct.images?.[0] || "/placeholder.svg"}
+                            alt={selectedProduct.name}
+                            className="max-w-full max-h-[80vh] object-contain rounded-lg"
+                            onError={(e) => {
+                                const target = e.target as HTMLImageElement
+                                target.src = "/placeholder.svg"
+                            }}
+                        />
+                        <div className="mt-4 text-white text-center">
+                            <p className="text-lg font-semibold">{selectedProduct.name}</p>
+                            {selectedProduct.images && selectedProduct.images.length > 1 && (
+                                <p className="text-sm text-gray-300 mt-1">
+                                    {currentImageIndex + 1} de {selectedProduct.images.length}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Miniaturas en la parte inferior */}
+                    {selectedProduct.images && selectedProduct.images.length > 1 && (
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 max-w-full overflow-x-auto px-4 pb-2">
+                            {selectedProduct.images.map((image: string, index: number) => (
+                                <img
+                                    key={index}
+                                    src={image || "/placeholder.svg"}
+                                    alt={`${selectedProduct.name} ${index + 1}`}
+                                    onClick={() => setCurrentImageIndex(index)}
+                                    onError={(e) => {
+                                        const target = e.target as HTMLImageElement
+                                        target.src = "/placeholder.svg"
+                                    }}
+                                    className={`w-16 h-16 object-cover rounded-lg border-2 cursor-pointer transition-all flex-shrink-0 ${currentImageIndex === index
+                                            ? "border-[#9d6a4e] scale-110"
+                                            : "border-white/30 hover:border-white/60"
+                                        }`}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     )
