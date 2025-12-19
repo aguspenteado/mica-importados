@@ -403,6 +403,253 @@ export const getCategories = async () => {
 }
 
 /**
+ * 🎯 CATEGORÍAS - Crea una nueva categoría
+ * @param categoryData - Datos de la categoría (name, icon, description, slug, subcategories)
+ * @returns Categoría creada
+ */
+export const createCategory = async (categoryData) => {
+    try {
+        console.log(`📝 [createCategory] Creando categoría: ${categoryData.name}`)
+
+        // Generar slug si no existe
+        const slug = categoryData.slug || categoryData.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+
+        const newCategory = {
+            name: categoryData.name.trim(),
+            slug: slug,
+            icon: categoryData.icon || "📦",
+            description: categoryData.description || "",
+            isActive: categoryData.isActive !== undefined ? categoryData.isActive : true,
+            subcategories: categoryData.subcategories || [],
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        }
+
+        const docRef = await addDoc(collection(db, COLLECTIONS.CATEGORIES), newCategory)
+
+        console.log(`✅ [createCategory] Categoría creada con ID: ${docRef.id}`)
+        return {
+            id: docRef.id,
+            ...newCategory,
+        }
+    } catch (error) {
+        console.error("❌ [createCategory] Error:", error)
+        throw error
+    }
+}
+
+/**
+ * 🎯 CATEGORÍAS - Actualiza una categoría agregando una subcategoría
+ * @param categoryId - ID de la categoría
+ * @param subcategoryName - Nombre de la subcategoría a agregar
+ * @returns Categoría actualizada
+ */
+export const addSubcategoryToCategory = async (categoryId, subcategoryName) => {
+    try {
+        console.log(`📝 [addSubcategoryToCategory] Agregando subcategoría "${subcategoryName}" a categoría ${categoryId}`)
+
+        const categoryRef = doc(db, COLLECTIONS.CATEGORIES, categoryId)
+        const categoryDoc = await getDoc(categoryRef)
+
+        if (!categoryDoc.exists()) {
+            throw new Error("Categoría no encontrada")
+        }
+
+        const categoryData = categoryDoc.data()
+        const currentSubcategories = categoryData.subcategories || []
+
+        // Verificar que la subcategoría no exista ya
+        if (currentSubcategories.includes(subcategoryName.trim())) {
+            throw new Error("La subcategoría ya existe")
+        }
+
+        // Agregar la nueva subcategoría
+        const updatedSubcategories = [...currentSubcategories, subcategoryName.trim()]
+
+        await updateDoc(categoryRef, {
+            subcategories: updatedSubcategories,
+            updatedAt: serverTimestamp(),
+        })
+
+        console.log(`✅ [addSubcategoryToCategory] Subcategoría agregada. Total: ${updatedSubcategories.length}`)
+        return {
+            success: true,
+            subcategories: updatedSubcategories,
+        }
+    } catch (error) {
+        console.error("❌ [addSubcategoryToCategory] Error:", error)
+        throw error
+    }
+}
+
+/**
+ * 🎯 SUBCATEGORÍAS - Obtiene todas las subcategorías de una categoría
+ * @param categoryName - Nombre de la categoría
+ * @returns Subcategorías (array de strings desde el documento de categoría)
+ */
+export const getSubcategories = async (categoryName) => {
+    try {
+        console.log(`📂 [getSubcategories] Obteniendo subcategorías para: ${categoryName}`)
+
+        // Buscar la categoría por nombre
+        const categoriesQuery = query(
+            collection(db, COLLECTIONS.CATEGORIES),
+            where("name", "==", categoryName)
+        )
+        const categoriesSnapshot = await getDocs(categoriesQuery)
+
+        if (categoriesSnapshot.empty) {
+            console.log(`📂 [getSubcategories] Categoría "${categoryName}" no encontrada`)
+            return []
+        }
+
+        const categoryDoc = categoriesSnapshot.docs[0]
+        const categoryData = categoryDoc.data()
+        const subcategoriesArray = categoryData.subcategories || []
+
+        // Convertir a formato compatible con el código existente
+        const subcategories = subcategoriesArray.map((subName, index) => ({
+            id: `${categoryDoc.id}_${index}`,
+            name: subName,
+            category: categoryName,
+        }))
+
+        console.log(`📂 [getSubcategories] Obtenidas ${subcategories.length} subcategorías`)
+        return subcategories
+    } catch (error) {
+        console.error("❌ [getSubcategories] Error:", error)
+        return [] // Retornar array vacío en lugar de fallar
+    }
+}
+
+/**
+ * 🎯 SUBCATEGORÍAS - Crea una nueva subcategoría
+ * @param subcategoryData - Datos de la subcategoría (name, category)
+ * @returns Subcategoría creada
+ */
+export const createSubcategory = async (subcategoryData) => {
+    try {
+        console.log(`📝 [createSubcategory] Creando subcategoría: ${subcategoryData.name} para categoría: ${subcategoryData.category}`)
+
+        const newSubcategory = {
+            name: subcategoryData.name.trim(),
+            category: subcategoryData.category.trim(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        }
+
+        const docRef = await addDoc(collection(db, COLLECTIONS.SUBCATEGORIES), newSubcategory)
+
+        console.log(`✅ [createSubcategory] Subcategoría creada con ID: ${docRef.id}`)
+        return {
+            id: docRef.id,
+            ...newSubcategory,
+        }
+    } catch (error) {
+        console.error("❌ [createSubcategory] Error:", error)
+        throw error
+    }
+}
+
+/**
+ * 🎯 CATEGORÍAS - Elimina una categoría
+ * @param categoryId - ID de la categoría
+ * @returns Resultado de la eliminación
+ */
+export const deleteCategory = async (categoryId) => {
+    try {
+        console.log(`🗑️ [deleteCategory] Eliminando categoría: ${categoryId}`)
+
+        await deleteDoc(doc(db, COLLECTIONS.CATEGORIES, categoryId))
+
+        console.log(`✅ [deleteCategory] Categoría eliminada: ${categoryId}`)
+        return { success: true, categoryId }
+    } catch (error) {
+        console.error("❌ [deleteCategory] Error:", error)
+        throw error
+    }
+}
+
+/**
+ * 🎯 SUBCATEGORÍAS - Elimina una subcategoría del array de subcategorías en el documento de categoría
+ * @param categoryId - ID de la categoría (extraído del subcategoryId)
+ * @param subcategoryName - Nombre de la subcategoría a eliminar
+ * @returns Resultado de la eliminación
+ */
+export const deleteSubcategory = async (categoryId, subcategoryName) => {
+    try {
+        console.log(`🗑️ [deleteSubcategory] Eliminando subcategoría "${subcategoryName}" de categoría ${categoryId}`)
+
+        const categoryRef = doc(db, COLLECTIONS.CATEGORIES, categoryId)
+        const categoryDoc = await getDoc(categoryRef)
+
+        if (!categoryDoc.exists()) {
+            throw new Error("Categoría no encontrada")
+        }
+
+        const categoryData = categoryDoc.data()
+        const currentSubcategories = categoryData.subcategories || []
+
+        // Filtrar la subcategoría a eliminar
+        const updatedSubcategories = currentSubcategories.filter((sub) => sub !== subcategoryName)
+
+        if (updatedSubcategories.length === currentSubcategories.length) {
+            throw new Error("Subcategoría no encontrada")
+        }
+
+        await updateDoc(categoryRef, {
+            subcategories: updatedSubcategories,
+            updatedAt: serverTimestamp(),
+        })
+
+        console.log(`✅ [deleteSubcategory] Subcategoría eliminada. Total restante: ${updatedSubcategories.length}`)
+        return { success: true, subcategories: updatedSubcategories }
+    } catch (error) {
+        console.error("❌ [deleteSubcategory] Error:", error)
+        throw error
+    }
+}
+
+/**
+ * 🎯 SUBCATEGORÍAS - Elimina todas las subcategorías de una categoría (limpia el array)
+ * @param categoryName - Nombre de la categoría
+ * @returns Resultado de la eliminación
+ */
+export const deleteSubcategoriesByCategory = async (categoryName) => {
+    try {
+        console.log(`🗑️ [deleteSubcategoriesByCategory] Eliminando todas las subcategorías de: ${categoryName}`)
+
+        // Buscar la categoría por nombre
+        const categoriesQuery = query(
+            collection(db, COLLECTIONS.CATEGORIES),
+            where("name", "==", categoryName)
+        )
+        const categoriesSnapshot = await getDocs(categoriesQuery)
+
+        if (categoriesSnapshot.empty) {
+            console.log(`📂 [deleteSubcategoriesByCategory] Categoría "${categoryName}" no encontrada`)
+            return { success: true, deletedCount: 0 }
+        }
+
+        const categoryDoc = categoriesSnapshot.docs[0]
+        const categoryData = categoryDoc.data()
+        const subcategoriesCount = (categoryData.subcategories || []).length
+
+        const categoryRef = doc(db, COLLECTIONS.CATEGORIES, categoryDoc.id)
+        await updateDoc(categoryRef, {
+            subcategories: [],
+            updatedAt: serverTimestamp(),
+        })
+
+        console.log(`✅ [deleteSubcategoriesByCategory] ${subcategoriesCount} subcategorías eliminadas`)
+        return { success: true, deletedCount: subcategoriesCount }
+    } catch (error) {
+        console.error("❌ [deleteSubcategoriesByCategory] Error:", error)
+        throw error
+    }
+}
+
+/**
  * 🎯 Obtiene talles disponibles para filtros (desde productos reales)
  * @param category - Categoría
  * @param subcategory - Subcategoría

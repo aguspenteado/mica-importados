@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ChevronDown, Grid3X3, X } from "lucide-react"
 import Link from "next/link"
+import { getCategories } from "@/lib/firestore-api"
 
 interface CompactNavigationMenuProps {
     onItemClick?: () => void
@@ -20,8 +21,22 @@ interface CompactNavigationMenuProps {
 
 export function CompactNavigationMenu({ onItemClick }: CompactNavigationMenuProps) {
     const [isOpen, setIsOpen] = useState(false)
+    const [firestoreCategories, setFirestoreCategories] = useState<any[]>([])
 
-    const categories = [
+    // Cargar categorías de Firestore
+    useEffect(() => {
+        const loadFirestoreCategories = async () => {
+            try {
+                const categories = await getCategories()
+                setFirestoreCategories(categories.filter((cat: any) => cat.isActive !== false))
+            } catch (error) {
+                console.error("Error loading categories:", error)
+            }
+        }
+        loadFirestoreCategories()
+    }, [])
+
+    const hardcodedCategories = [
         {
             name: "Joyas",
             icon: "💎",
@@ -78,6 +93,40 @@ export function CompactNavigationMenu({ onItemClick }: CompactNavigationMenuProp
         },
     ]
 
+    // Combinar categorías hardcodeadas con las de Firestore
+    // Convertir categorías de Firestore al formato esperado
+    const firestoreCategoriesFormatted = firestoreCategories.map((cat: any) => {
+        const categorySlug = cat.slug || cat.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+        // Obtener un color de gradiente basado en el índice
+        const colors = [
+            "from-[#ebcfc4] to-[#d4b5a8]",
+            "from-[#d4b5a8] to-[#c9a696]",
+            "from-[#c9a696] to-[#be9784]",
+            "from-[#be9784] to-[#b38872]",
+            "from-[#b38872] to-[#a67760]",
+            "from-[#a67760] to-[#99664e]",
+            "from-[#99664e] to-[#8c553c]",
+            "from-[#8c553c] to-[#7f442a]",
+            "from-[#7f442a] to-[#723318]",
+        ]
+        const colorIndex = firestoreCategories.indexOf(cat) % colors.length
+        return {
+            name: cat.name,
+            icon: cat.icon || "📦",
+            color: colors[colorIndex],
+            subcategories: cat.subcategories || [],
+            slug: categorySlug,
+        }
+    })
+
+    // Combinar categorías, eliminando duplicados (priorizando las hardcodeadas)
+    const allCategoryNames = new Set(hardcodedCategories.map((c) => c.name))
+    const uniqueFirestoreCategories = firestoreCategoriesFormatted.filter(
+        (cat) => !allCategoryNames.has(cat.name)
+    )
+
+    const categories = [...hardcodedCategories, ...uniqueFirestoreCategories]
+
     const handleItemClick = () => {
         setIsOpen(false)
         onItemClick?.()
@@ -104,7 +153,7 @@ export function CompactNavigationMenu({ onItemClick }: CompactNavigationMenuProp
                             <div className="space-y-1">
                                 {categories.map((category) => (
                                     <div key={category.name}>
-                                        <Link href={`/productos?category=${encodeURIComponent(category.name)}`}>
+                                        <Link href={`/productos?categoria=${category.slug || encodeURIComponent(category.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""))}`}>
                                             <DropdownMenuItem
                                                 className="cursor-pointer p-3 rounded-lg hover:bg-[#f5f0ed] focus:bg-[#f5f0ed]"
                                                 onClick={handleItemClick}
@@ -114,8 +163,10 @@ export function CompactNavigationMenu({ onItemClick }: CompactNavigationMenuProp
                                                     <div className="flex-1">
                                                         <div className="font-medium text-[#9d6a4e]">{category.name}</div>
                                                         <div className="text-xs text-gray-500 mt-1">
-                                                            {category.subcategories.slice(0, 3).join(", ")}
-                                                            {category.subcategories.length > 3 && "..."}
+                                                            {category.subcategories && category.subcategories.length > 0
+                                                                ? category.subcategories.slice(0, 3).join(", ")
+                                                                : "Sin subcategorías"}
+                                                            {category.subcategories && category.subcategories.length > 3 && "..."}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -166,7 +217,7 @@ export function CompactNavigationMenu({ onItemClick }: CompactNavigationMenuProp
                                     {categories.map((category, index) => (
                                         <Link
                                             key={category.name}
-                                            href={`/productos?category=${encodeURIComponent(category.name)}`}
+                                            href={`/productos?categoria=${category.slug || encodeURIComponent(category.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""))}`}
                                             onClick={handleItemClick}
                                         >
                                             <Card className="hover:shadow-md transition-all duration-200 border-0 overflow-hidden">
@@ -177,17 +228,25 @@ export function CompactNavigationMenu({ onItemClick }: CompactNavigationMenuProp
                                                             <div className="flex-1">
                                                                 <h3 className="font-bold text-white text-base mb-1">{category.name}</h3>
                                                                 <div className="flex flex-wrap gap-1">
-                                                                    {category.subcategories.slice(0, 4).map((sub) => (
-                                                                        <Badge
-                                                                            key={sub}
-                                                                            className="bg-white/20 text-white border-white/30 text-xs px-2 py-0.5"
-                                                                        >
-                                                                            {sub}
-                                                                        </Badge>
-                                                                    ))}
-                                                                    {category.subcategories.length > 4 && (
+                                                                    {category.subcategories && category.subcategories.length > 0 ? (
+                                                                        <>
+                                                                            {category.subcategories.slice(0, 4).map((sub: string) => (
+                                                                                <Badge
+                                                                                    key={sub}
+                                                                                    className="bg-white/20 text-white border-white/30 text-xs px-2 py-0.5"
+                                                                                >
+                                                                                    {sub}
+                                                                                </Badge>
+                                                                            ))}
+                                                                            {category.subcategories.length > 4 && (
+                                                                                <Badge className="bg-white/20 text-white border-white/30 text-xs px-2 py-0.5">
+                                                                                    +{category.subcategories.length - 4}
+                                                                                </Badge>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
                                                                         <Badge className="bg-white/20 text-white border-white/30 text-xs px-2 py-0.5">
-                                                                            +{category.subcategories.length - 4}
+                                                                            Sin subcategorías
                                                                         </Badge>
                                                                     )}
                                                                 </div>

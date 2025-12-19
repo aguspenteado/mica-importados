@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, Plus, Upload, X, Save, Eye, Trash2, Package, Star, Loader2, ImageIcon, Tag, DollarSign, FileText, Palette, Ruler, CheckCircle, AlertCircle, Sparkles, EyeOff, TrendingUp, ShoppingCart, Cloud, RefreshCw, Settings, AlertTriangle, Menu } from 'lucide-react'
+import { ArrowLeft, Plus, Upload, X, Save, Eye, Trash2, Package, Star, Loader2, ImageIcon, Tag, DollarSign, FileText, Palette, Ruler, CheckCircle, AlertCircle, Sparkles, EyeOff, TrendingUp, ShoppingCart, Cloud, RefreshCw, Settings, AlertTriangle, Menu, FolderPlus, Pencil } from 'lucide-react'
 import Link from "next/link"
-import { createProduct, getProducts, deleteProduct, updateProduct } from "@/lib/firestore-api"
+import { createProduct, getProducts, deleteProduct, updateProduct, createCategory, createSubcategory, getCategories, getSubcategories, deleteCategory, deleteSubcategory, deleteSubcategoriesByCategory, addSubcategoryToCategory } from "@/lib/firestore-api"
 import { uploadImages, validateImages, checkCloudinaryStatus } from "@/lib/upload-helpers"
 
 // Tipos para TypeScript
@@ -63,6 +63,30 @@ export default function PanelPage() {
     // Nuevo estado para la edición de imágenes de un producto existente
     const [editingProduct, setEditingProduct] = useState<any | null>(null)
     const [editProductImages, setEditProductImages] = useState<string[]>([])
+
+    // Estados para crear categorías y subcategorías
+    const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false)
+    const [newCategoryName, setNewCategoryName] = useState("")
+    const [newCategoryIcon, setNewCategoryIcon] = useState("📦")
+    const [newCategoryDescription, setNewCategoryDescription] = useState("")
+    const [newSubcategoryName, setNewSubcategoryName] = useState("")
+    const [selectedCategoryForSubcategory, setSelectedCategoryForSubcategory] = useState("")
+    const [creatingCategory, setCreatingCategory] = useState(false)
+    const [creatingSubcategory, setCreatingSubcategory] = useState(false)
+
+    // Estado para crear subcategoría al crear categoría
+    const [createSubcategoryWithCategory, setCreateSubcategoryWithCategory] = useState(false)
+    const [initialSubcategoryName, setInitialSubcategoryName] = useState("")
+
+    // Estados para categorías y subcategorías desde Firestore
+    const [firestoreCategories, setFirestoreCategories] = useState<any[]>([])
+    const [firestoreSubcategories, setFirestoreSubcategories] = useState<any[]>([])
+    const [loadingCategories, setLoadingCategories] = useState(false)
+
+    // Estados para editar subcategorías
+    const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+    const [newSubcategoryNameToAdd, setNewSubcategoryNameToAdd] = useState("")
+    const [addingSubcategory, setAddingSubcategory] = useState(false)
 
     // 🎯 CATEGORÍAS CON TALLES INTELIGENTES
     const categoriesData = {
@@ -133,7 +157,105 @@ export default function PanelPage() {
     // 🔥 VERIFICAR CONEXIÓN A CLOUDINARY AL CARGAR
     useEffect(() => {
         checkCloudinaryConnection()
+        loadCategories()
     }, [])
+
+    // 🔥 CARGAR CATEGORÍAS DESDE FIRESTORE
+    const loadCategories = async () => {
+        try {
+            setLoadingCategories(true)
+            const categories = await getCategories()
+            setFirestoreCategories(categories)
+        } catch (error) {
+            console.error("Error loading categories:", error)
+        } finally {
+            setLoadingCategories(false)
+        }
+    }
+
+    // 🔥 CARGAR SUBCATEGORÍAS CUANDO SE SELECCIONA UNA CATEGORÍA (para el formulario)
+    useEffect(() => {
+        if (formData.category) {
+            console.log(`🔄 useEffect: Categoría seleccionada en formulario: ${formData.category}`)
+            loadSubcategoriesForCategory(formData.category)
+        } else {
+            // Limpiar subcategorías si no hay categoría seleccionada
+            setFirestoreSubcategories([])
+        }
+    }, [formData.category])
+
+    // 🔥 CARGAR SUBCATEGORÍAS CUANDO SE SELECCIONA UNA CATEGORÍA (para el modal)
+    useEffect(() => {
+        if (selectedCategoryForSubcategory) {
+            loadSubcategoriesForCategory(selectedCategoryForSubcategory)
+        }
+    }, [selectedCategoryForSubcategory])
+
+    const loadSubcategoriesForCategory = async (categoryName: string) => {
+        try {
+            console.log(`🔄 Cargando subcategorías para: ${categoryName}`)
+            const subcategories = await getSubcategories(categoryName)
+            console.log(`✅ Subcategorías cargadas:`, subcategories)
+            setFirestoreSubcategories(subcategories)
+        } catch (error) {
+            console.error("Error loading subcategories:", error)
+            setFirestoreSubcategories([])
+        }
+    }
+
+    // 🔥 COMBINAR CATEGORÍAS: Hardcodeadas + Firestore
+    const getAllCategories = () => {
+        const hardcodedCategories = Object.keys(categoriesData)
+        const firestoreCategoryNames = firestoreCategories
+            .filter((cat) => cat.isActive !== false)
+            .map((cat) => cat.name)
+
+        // Combinar y eliminar duplicados
+        const allCategories = [...new Set([...hardcodedCategories, ...firestoreCategoryNames])]
+        return allCategories.sort()
+    }
+
+    // 🔥 OBTENER DATOS DE CATEGORÍA (icono, subcategorías, etc.)
+    const getCategoryData = (categoryName: string) => {
+        // Primero buscar en hardcoded
+        if (categoriesData[categoryName as keyof typeof categoriesData]) {
+            return categoriesData[categoryName as keyof typeof categoriesData]
+        }
+
+        // Si no está en hardcoded, buscar en Firestore
+        const firestoreCategory = firestoreCategories.find((cat) => cat.name === categoryName)
+        if (firestoreCategory) {
+            return {
+                icon: firestoreCategory.icon || "📦",
+                subcategories: [], // Se cargarán desde Firestore
+                suggestedSizes: [],
+            }
+        }
+
+        // Default
+        return {
+            icon: "📦",
+            subcategories: [],
+            suggestedSizes: [],
+        }
+    }
+
+    // 🔥 OBTENER SUBCATEGORÍAS PARA UNA CATEGORÍA
+    const getSubcategoriesForCategory = (categoryName: string): string[] => {
+        // Obtener subcategorías hardcodeadas (si existen)
+        const hardcodedData = categoriesData[categoryName as keyof typeof categoriesData]
+        const hardcodedSubcats = hardcodedData ? hardcodedData.subcategories : []
+
+        // Obtener subcategorías de Firestore
+        const firestoreSubcats = firestoreSubcategories
+            .filter((sub) => sub.category === categoryName)
+            .map((sub) => sub.name)
+
+        // Combinar ambas listas y eliminar duplicados
+        const allSubcategories = [...new Set([...hardcodedSubcats, ...firestoreSubcats])]
+
+        return allSubcategories
+    }
     const checkCloudinaryConnection = async () => {
         try {
             setCloudinaryStatus("checking")
@@ -537,6 +659,262 @@ export default function PanelPage() {
         setEditProductImages([])
     }
 
+    // Funciones para crear categorías y subcategorías
+    const closeCategoryModal = () => {
+        setIsCategoryModalOpen(false)
+        setNewCategoryName("")
+        setNewCategoryIcon("📦")
+        setNewCategoryDescription("")
+        setNewSubcategoryName("")
+        setSelectedCategoryForSubcategory("")
+        setCreateSubcategoryWithCategory(false)
+        setInitialSubcategoryName("")
+    }
+
+    const handleCreateCategory = async () => {
+        if (!newCategoryName.trim()) {
+            showMessage("error", "Por favor ingresa un nombre para la categoría")
+            return
+        }
+
+        // Validar subcategoría si se quiere crear
+        if (createSubcategoryWithCategory && !initialSubcategoryName.trim()) {
+            showMessage("error", "Por favor ingresa un nombre para la subcategoría")
+            return
+        }
+
+        try {
+            setCreatingCategory(true)
+
+            // Guardar valores antes de limpiar
+            const categoryNameToCreate = newCategoryName.trim()
+            const subcategoryNameToCreate = initialSubcategoryName.trim()
+            const shouldCreateSubcategory = createSubcategoryWithCategory && subcategoryNameToCreate
+
+            // Crear la categoría con subcategorías si corresponde
+            const subcategoriesArray = shouldCreateSubcategory ? [subcategoryNameToCreate] : []
+
+            const newCategory = await createCategory({
+                name: categoryNameToCreate,
+                icon: newCategoryIcon || "📦",
+                description: newCategoryDescription.trim(),
+                subcategories: subcategoriesArray,
+            })
+
+            if (shouldCreateSubcategory) {
+                showMessage("success", `¡Categoría "${categoryNameToCreate}" y subcategoría "${subcategoryNameToCreate}" creadas exitosamente!`)
+            } else {
+                showMessage("success", `¡Categoría "${categoryNameToCreate}" creada exitosamente!`)
+            }
+
+            setNewCategoryName("")
+            setNewCategoryIcon("📦")
+            setNewCategoryDescription("")
+            setCreateSubcategoryWithCategory(false)
+            setInitialSubcategoryName("")
+
+            // Recargar categorías desde Firestore
+            await loadCategories()
+
+            // Si se creó subcategoría, recargar subcategorías para que aparezcan inmediatamente
+            if (shouldCreateSubcategory) {
+                // Esperar un poco para que Firestore procese la subcategoría
+                await new Promise(resolve => setTimeout(resolve, 1000))
+                // Cargar subcategorías para la nueva categoría
+                console.log(`🔄 Recargando subcategorías para: ${categoryNameToCreate}`)
+                await loadSubcategoriesForCategory(categoryNameToCreate)
+                // Si la categoría está seleccionada en el formulario, recargar también
+                if (formData.category === categoryNameToCreate) {
+                    await loadSubcategoriesForCategory(formData.category)
+                }
+            }
+
+            closeCategoryModal()
+
+            // Recargar subcategorías una vez más después de cerrar el modal
+            // para asegurarse de que estén disponibles
+            if (shouldCreateSubcategory && formData.category === categoryNameToCreate) {
+                setTimeout(async () => {
+                    console.log(`🔄 Recarga final de subcategorías para: ${formData.category}`)
+                    await loadSubcategoriesForCategory(formData.category)
+                }, 1500)
+            }
+        } catch (error: any) {
+            console.error("Error creating category:", error)
+            showMessage("error", `Error al crear la categoría: ${error.message}`)
+        } finally {
+            setCreatingCategory(false)
+        }
+    }
+
+    // 🔥 ELIMINAR CATEGORÍA
+    const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
+        if (!confirm(`¿Estás seguro de que quieres eliminar la categoría "${categoryName}"?\n\nEsto también eliminará todas las subcategorías asociadas.`)) {
+            return
+        }
+
+        try {
+            // Primero eliminar todas las subcategorías de esta categoría
+            await deleteSubcategoriesByCategory(categoryName)
+
+            // Luego eliminar la categoría
+            await deleteCategory(categoryId)
+
+            showMessage("success", `Categoría "${categoryName}" eliminada correctamente`)
+
+            // Recargar categorías
+            await loadCategories()
+
+            // Si la categoría eliminada estaba seleccionada, limpiar el formulario
+            if (formData.category === categoryName) {
+                setFormData((prev) => ({
+                    ...prev,
+                    category: "",
+                    subcategory: "",
+                }))
+            }
+        } catch (error: any) {
+            console.error("Error deleting category:", error)
+            showMessage("error", `Error al eliminar la categoría: ${error.message}`)
+        }
+    }
+
+    // 🔥 ELIMINAR SUBCATEGORÍA
+    const handleDeleteSubcategory = async (subcategoryId: string, subcategoryName: string) => {
+        if (!confirm(`¿Estás seguro de que quieres eliminar la subcategoría "${subcategoryName}"?`)) {
+            return
+        }
+
+        try {
+            // El subcategoryId tiene formato: categoryId_index
+            // Extraer categoryId (primera parte antes del guion bajo)
+            const categoryId = subcategoryId.split("_")[0]
+
+            await deleteSubcategory(categoryId, subcategoryName)
+            showMessage("success", `Subcategoría "${subcategoryName}" eliminada correctamente`)
+
+            // Recargar subcategorías si la categoría está seleccionada
+            if (formData.category) {
+                await loadSubcategoriesForCategory(formData.category)
+            }
+
+            // Si la subcategoría eliminada estaba seleccionada, limpiarla
+            if (formData.subcategory === subcategoryName) {
+                setFormData((prev) => ({
+                    ...prev,
+                    subcategory: "",
+                }))
+            }
+        } catch (error: any) {
+            console.error("Error deleting subcategory:", error)
+            showMessage("error", `Error al eliminar la subcategoría: ${error.message}`)
+        }
+    }
+
+    const handleCreateSubcategory = async () => {
+        if (!newSubcategoryName.trim()) {
+            showMessage("error", "Por favor ingresa un nombre para la subcategoría")
+            return
+        }
+
+        if (!selectedCategoryForSubcategory) {
+            showMessage("error", "Por favor selecciona una categoría")
+            return
+        }
+
+        try {
+            setCreatingSubcategory(true)
+
+            // Buscar la categoría por nombre para obtener su ID
+            const categories = await getCategories()
+            const categoryToUpdate = categories.find((cat: any) => cat.name === selectedCategoryForSubcategory)
+
+            if (!categoryToUpdate || !categoryToUpdate.id) {
+                throw new Error("Categoría no encontrada")
+            }
+
+            // Agregar la subcategoría al documento de la categoría
+            await addSubcategoryToCategory(categoryToUpdate.id, newSubcategoryName.trim())
+
+            showMessage("success", `¡Subcategoría "${newSubcategoryName}" creada exitosamente para la categoría "${selectedCategoryForSubcategory}"!`)
+
+            const categoryToKeep = selectedCategoryForSubcategory // Guardar la categoría antes de limpiar
+            setNewSubcategoryName("") // Limpiar solo el nombre, NO la categoría seleccionada
+
+            // Recargar subcategorías para mostrar la nueva inmediatamente
+            await new Promise((resolve) => setTimeout(resolve, 500))
+            await loadSubcategoriesForCategory(categoryToKeep)
+
+            // También recargar si la categoría está seleccionada en el formulario
+            if (formData.category === categoryToKeep) {
+                await loadSubcategoriesForCategory(formData.category)
+            }
+        } catch (error: any) {
+            console.error("Error creating subcategory:", error)
+            showMessage("error", `Error al crear la subcategoría: ${error.message}`)
+        } finally {
+            setCreatingSubcategory(false)
+        }
+    }
+
+    // 🔧 AGREGAR SUBCATEGORÍA A CATEGORÍA EXISTENTE (desde el modal de edición)
+    const handleAddSubcategoryToCategory = async (categoryId: string) => {
+        if (!newSubcategoryNameToAdd.trim()) {
+            showMessage("error", "Por favor ingresa un nombre para la subcategoría")
+            return
+        }
+
+        try {
+            setAddingSubcategory(true)
+
+            // Obtener la categoría para verificar cuántas subcategorías tiene
+            const category = firestoreCategories.find((cat) => cat.id === categoryId)
+            if (!category) {
+                throw new Error("Categoría no encontrada")
+            }
+
+            const currentSubcategories = category.subcategories || []
+            if (currentSubcategories.length >= 10) {
+                showMessage("error", "No puedes agregar más de 10 subcategorías por categoría")
+                return
+            }
+
+            // Verificar que no exista ya
+            if (currentSubcategories.includes(newSubcategoryNameToAdd.trim())) {
+                showMessage("error", "Esta subcategoría ya existe")
+                return
+            }
+
+            // Agregar la subcategoría
+            await addSubcategoryToCategory(categoryId, newSubcategoryNameToAdd.trim())
+
+            showMessage("success", `¡Subcategoría "${newSubcategoryNameToAdd}" agregada exitosamente!`)
+
+            // Recargar categorías
+            await loadCategories()
+            setNewSubcategoryNameToAdd("")
+        } catch (error: any) {
+            console.error("Error adding subcategory:", error)
+            showMessage("error", `Error al agregar la subcategoría: ${error.message}`)
+        } finally {
+            setAddingSubcategory(false)
+        }
+    }
+
+    // 🗑️ ELIMINAR SUBCATEGORÍA DE CATEGORÍA
+    const handleRemoveSubcategory = async (categoryId: string, subcategoryName: string) => {
+        try {
+            await deleteSubcategory(categoryId, subcategoryName)
+            showMessage("success", `Subcategoría "${subcategoryName}" eliminada correctamente`)
+
+            // Recargar categorías
+            await loadCategories()
+        } catch (error: any) {
+            console.error("Error removing subcategory:", error)
+            showMessage("error", `Error al eliminar la subcategoría: ${error.message}`)
+        }
+    }
+
     // Estadísticas
     const totalProducts = products.length
     const activeProducts = products.filter((p: any) => p.inStock).length
@@ -628,6 +1006,15 @@ export default function PanelPage() {
                                 Crear Producto
                             </Button>
                             <Button
+                                onClick={() => setIsCategoryModalOpen(true)}
+                                variant="outline"
+                                size="sm"
+                                className="border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed]"
+                            >
+                                <FolderPlus className="w-4 h-4 mr-2" />
+                                Categorías
+                            </Button>
+                            <Button
                                 onClick={() => setActiveTab("manage")}
                                 variant={activeTab === "manage" ? "default" : "outline"}
                                 size="sm"
@@ -660,6 +1047,18 @@ export default function PanelPage() {
                                 >
                                     <Plus className="w-4 h-4 mr-2" />
                                     Crear Producto
+                                </Button>
+                                <Button
+                                    onClick={() => {
+                                        setIsCategoryModalOpen(true)
+                                        setIsMobileMenuOpen(false)
+                                    }}
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full justify-start border-[#ebcfc4] text-[#9d6a4e] hover:bg-[#f5f0ed]"
+                                >
+                                    <FolderPlus className="w-4 h-4 mr-2" />
+                                    Categorías
                                 </Button>
                                 <Button
                                     onClick={() => {
@@ -914,14 +1313,23 @@ export default function PanelPage() {
                                                         <SelectValue placeholder="Seleccionar categoría" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {Object.entries(categoriesData).map(([category, data]) => (
-                                                            <SelectItem key={category} value={category}>
-                                                                <span className="flex items-center">
-                                                                    <span className="mr-2">{data.icon}</span>
-                                                                    {category}
-                                                                </span>
-                                                            </SelectItem>
-                                                        ))}
+                                                        {loadingCategories ? (
+                                                            <div className="px-2 py-1.5 text-sm text-gray-500">
+                                                                Cargando categorías...
+                                                            </div>
+                                                        ) : (
+                                                            getAllCategories().map((category) => {
+                                                                const categoryData = getCategoryData(category)
+                                                                return (
+                                                                    <SelectItem key={category} value={category}>
+                                                                        <span className="flex items-center">
+                                                                            <span className="mr-2">{categoryData.icon}</span>
+                                                                            {category}
+                                                                        </span>
+                                                                    </SelectItem>
+                                                                )
+                                                            })
+                                                        )}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -939,13 +1347,11 @@ export default function PanelPage() {
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {formData.category &&
-                                                            categoriesData[formData.category as keyof typeof categoriesData]?.subcategories.map(
-                                                                (subcategory) => (
-                                                                    <SelectItem key={subcategory} value={subcategory}>
-                                                                        {subcategory}
-                                                                    </SelectItem>
-                                                                ),
-                                                            )}
+                                                            getSubcategoriesForCategory(formData.category).map((subcategory) => (
+                                                                <SelectItem key={subcategory} value={subcategory}>
+                                                                    {subcategory}
+                                                                </SelectItem>
+                                                            ))}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -1484,6 +1890,263 @@ export default function PanelPage() {
                     </div>
                 )}
             </div>
+
+            {/* Category/Subcategory Creation Modal */}
+            {isCategoryModalOpen && (
+                <>
+                    {/* Overlay */}
+                    <div className="fixed inset-0 bg-black/50 z-50" onClick={closeCategoryModal} />
+                    {/* Modal */}
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+                            <div className="sticky top-0 bg-white border-b border-[#ebcfc4] p-4 flex items-center justify-between">
+                                <h2 className="text-xl font-bold text-[#9d6a4e] flex items-center">
+                                    <FolderPlus className="w-5 h-5 mr-2" />
+                                    Crear Categoría o Subcategoría
+                                </h2>
+                                <Button variant="ghost" size="sm" onClick={closeCategoryModal}>
+                                    <X className="w-6 h-6" />
+                                </Button>
+                            </div>
+
+                            <div className="p-6 space-y-8">
+                                {/* Lista de Categorías Creadas */}
+                                {firestoreCategories.length > 0 && (
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#9d6a4e] mb-4 flex items-center">
+                                            <Package className="w-5 h-5 mr-2" />
+                                            Categorías Creadas ({firestoreCategories.length})
+                                        </h3>
+                                        <div className="space-y-2 max-h-96 overflow-y-auto">
+                                            {firestoreCategories.map((category) => {
+                                                const isEditing = editingCategoryId === category.id
+                                                const subcategories = category.subcategories || []
+                                                const canAddMore = subcategories.length < 10
+
+                                                return (
+                                                    <div
+                                                        key={category.id}
+                                                        className="p-3 bg-[#f5f0ed] rounded-lg border border-[#ebcfc4]"
+                                                    >
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <div className="flex items-center space-x-2">
+                                                                <span className="text-xl">{category.icon || "📦"}</span>
+                                                                <div>
+                                                                    <div className="font-medium text-[#9d6a4e]">{category.name}</div>
+                                                                    {category.description && (
+                                                                        <div className="text-xs text-gray-500">{category.description}</div>
+                                                                    )}
+                                                                    <div className="text-xs text-gray-400 mt-1">
+                                                                        {subcategories.length}/10 subcategorías
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center space-x-2">
+                                                                <Button
+                                                                    onClick={() => {
+                                                                        if (isEditing) {
+                                                                            setEditingCategoryId(null)
+                                                                            setNewSubcategoryNameToAdd("")
+                                                                        } else {
+                                                                            setEditingCategoryId(category.id)
+                                                                        }
+                                                                    }}
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="text-[#9d6a4e] hover:text-[#b38872] hover:bg-[#ebcfc4]"
+                                                                >
+                                                                    <Pencil className="w-4 h-4 mr-1" />
+                                                                    {isEditing ? "Cancelar" : "Editar"}
+                                                                </Button>
+                                                                <Button
+                                                                    onClick={() => handleDeleteCategory(category.id, category.name)}
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Mostrar subcategorías existentes */}
+                                                        {subcategories.length > 0 && (
+                                                            <div className="mt-2 mb-3">
+                                                                <div className="text-xs font-medium text-[#9d6a4e] mb-1">Subcategorías:</div>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {subcategories.map((sub: string, index: number) => (
+                                                                        <Badge
+                                                                            key={index}
+                                                                            variant="secondary"
+                                                                            className="text-xs bg-[#ebcfc4] text-[#9d6a4e] flex items-center gap-1"
+                                                                        >
+                                                                            {sub}
+                                                                            {isEditing && (
+                                                                                <button
+                                                                                    onClick={() => handleRemoveSubcategory(category.id, sub)}
+                                                                                    className="ml-1 hover:text-red-600"
+                                                                                >
+                                                                                    <X className="w-3 h-3" />
+                                                                                </button>
+                                                                            )}
+                                                                        </Badge>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Formulario para agregar subcategorías */}
+                                                        {isEditing && (
+                                                            <div className="mt-3 pt-3 border-t border-[#ebcfc4]">
+                                                                {canAddMore ? (
+                                                                    <div className="flex gap-2">
+                                                                        <Input
+                                                                            value={newSubcategoryNameToAdd}
+                                                                            onChange={(e) => setNewSubcategoryNameToAdd(e.target.value)}
+                                                                            placeholder="Nombre de la subcategoría"
+                                                                            className="flex-1 text-sm"
+                                                                            onKeyPress={(e) => {
+                                                                                if (e.key === "Enter" && newSubcategoryNameToAdd.trim()) {
+                                                                                    handleAddSubcategoryToCategory(category.id)
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                        <Button
+                                                                            onClick={() => handleAddSubcategoryToCategory(category.id)}
+                                                                            disabled={!newSubcategoryNameToAdd.trim() || addingSubcategory}
+                                                                            size="sm"
+                                                                            className="bg-[#9d6a4e] hover:bg-[#b38872] text-white"
+                                                                        >
+                                                                            {addingSubcategory ? (
+                                                                                <>
+                                                                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                                                                    Agregando...
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <Plus className="w-3 h-3 mr-1" />
+                                                                                    Agregar
+                                                                                </>
+                                                                            )}
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                                                                        Máximo de 10 subcategorías alcanzado. Elimina una para agregar otra.
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Crear Categoría */}
+                                <div>
+                                    <h3 className="text-lg font-semibold text-[#9d6a4e] mb-4 flex items-center">
+                                        <Tag className="w-5 h-5 mr-2" />
+                                        Nueva Categoría
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <Label htmlFor="categoryName" className="text-[#9d6a4e] font-medium">
+                                                Nombre de la Categoría *
+                                            </Label>
+                                            <Input
+                                                id="categoryName"
+                                                value={newCategoryName}
+                                                onChange={(e) => setNewCategoryName(e.target.value)}
+                                                placeholder="Ej: Electrónica"
+                                                className="mt-1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="categoryIcon" className="text-[#9d6a4e] font-medium">
+                                                Icono (Emoji)
+                                            </Label>
+                                            <Input
+                                                id="categoryIcon"
+                                                value={newCategoryIcon}
+                                                onChange={(e) => setNewCategoryIcon(e.target.value)}
+                                                placeholder="📦"
+                                                className="mt-1"
+                                                maxLength={2}
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Ingresa un emoji para representar la categoría
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="categoryDescription" className="text-[#9d6a4e] font-medium">
+                                                Descripción
+                                            </Label>
+                                            <Textarea
+                                                id="categoryDescription"
+                                                value={newCategoryDescription}
+                                                onChange={(e) => setNewCategoryDescription(e.target.value)}
+                                                placeholder="Descripción opcional de la categoría"
+                                                className="mt-1"
+                                                rows={3}
+                                            />
+                                        </div>
+
+                                        {/* Opción para crear subcategoría al mismo tiempo */}
+                                        <div className="flex items-center space-x-2 pt-2">
+                                            <input
+                                                type="checkbox"
+                                                id="createSubcategoryWithCategory"
+                                                checked={createSubcategoryWithCategory}
+                                                onChange={(e) => setCreateSubcategoryWithCategory(e.target.checked)}
+                                                className="rounded border-[#ebcfc4]"
+                                            />
+                                            <Label htmlFor="createSubcategoryWithCategory" className="text-[#9d6a4e] font-medium cursor-pointer">
+                                                También crear una subcategoría
+                                            </Label>
+                                        </div>
+
+                                        {createSubcategoryWithCategory && (
+                                            <div>
+                                                <Label htmlFor="initialSubcategoryName" className="text-[#9d6a4e] font-medium">
+                                                    Nombre de la Subcategoría *
+                                                </Label>
+                                                <Input
+                                                    id="initialSubcategoryName"
+                                                    value={initialSubcategoryName}
+                                                    onChange={(e) => setInitialSubcategoryName(e.target.value)}
+                                                    placeholder="Ej: Auriculares"
+                                                    className="mt-1"
+                                                />
+                                            </div>
+                                        )}
+
+                                        <Button
+                                            onClick={handleCreateCategory}
+                                            disabled={creatingCategory || !newCategoryName.trim() || (createSubcategoryWithCategory && !initialSubcategoryName.trim())}
+                                            className="w-full bg-[#9d6a4e] hover:bg-[#b38872] text-white border-0"
+                                        >
+                                            {creatingCategory ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                    Creando...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Plus className="w-4 h-4 mr-2" />
+                                                    {createSubcategoryWithCategory ? "Crear Categoría y Subcategoría" : "Crear Categoría"}
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     )
 }
